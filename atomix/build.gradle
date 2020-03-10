@@ -13,4 +13,11 @@ repositories {
 
 dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.12'
+
+    // https://mvnrepository.com/artifact/io.atomix/atomix
+    compile group: 'io.atomix', name: 'atomix', version: '3.1.5'
+    compile group: 'io.atomix', name: 'atomix-raft', version: '3.1.5'
+    compile group: 'io.atomix', name: 'atomix-primary-backup', version: '3.1.5'
+    compile group: 'io.atomix', name: 'atomix-gossip', version: '3.1.5'
+
 }
