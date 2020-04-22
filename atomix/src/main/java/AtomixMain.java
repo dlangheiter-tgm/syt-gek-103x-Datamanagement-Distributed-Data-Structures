@@ -1,44 +1,36 @@
-import io.atomix.cluster.Node;
 import io.atomix.cluster.discovery.BootstrapDiscoveryProvider;
 import io.atomix.core.Atomix;
 import io.atomix.core.AtomixBuilder;
 import io.atomix.core.profile.Profile;
-import io.atomix.utils.net.Address;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class AtomixMain {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         AtomixBuilder builder = Atomix.builder();
 
-        List<Address> addresses = new ArrayList<>();
-        addresses.add(new Address("localhost", 18000));
-        addresses.add(new Address("localhost", 18001));
-        addresses.add(new Address("localhost", 18002));
-
-        builder.withMemberId("member1")
-                .withAddress(addresses.get(0))
+        builder.withMemberId(StaticVars.masterId)
+                .withAddress(StaticVars.masterAddress)
                 .build();
 
         builder.withMembershipProvider(BootstrapDiscoveryProvider.builder()
-                .withNodes(
-                        Node.builder()
-                                .withId("member1")
-                                .withAddress(addresses.get(1))
-                                .build(),
-                        Node.builder()
-                                .withId("member2")
-                                .withAddress(addresses.get(2))
-                                .build())
+                .withNodes(StaticVars.master, StaticVars.client1, StaticVars.client2)
                 .build());
 
         builder.addProfile(Profile.dataGrid());
 
         Atomix atomix = builder.build();
         atomix.start().join();
+        System.out.println("Cluster formed");
 
+        AtomicInteger i = new AtomicInteger();
+        while (true) {
+            atomix.getEventService().send(StaticVars.topicFibonacci, i.get()).thenAccept(response -> {
+                System.out.println("Fib " + i.getAndIncrement() + ": " + response);
+            });
+            Thread.sleep(1000);
+        }
     }
 
 }
