@@ -1,8 +1,12 @@
+package bolts;
+
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import models.AggregationWindow;
 import org.apache.storm.task.OutputCollector;
 import org.apache.storm.task.TopologyContext;
+import org.apache.storm.topology.OutputFieldsDeclarer;
 import org.apache.storm.topology.base.BaseRichBolt;
 import org.apache.storm.tuple.Tuple;
 import org.slf4j.Logger;
@@ -56,5 +60,10 @@ public class FileWritingBolt extends BaseRichBolt {
                 logger.error("Failed to write data to file.", e);
             }
         }
+    }
+
+    @Override
+    public void declareOutputFields(OutputFieldsDeclarer declarer) {
+        
     }
 }

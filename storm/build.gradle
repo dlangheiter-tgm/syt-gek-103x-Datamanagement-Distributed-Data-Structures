@@ -2,17 +2,22 @@ plugins {
     id 'java'
 }
 
-group 'org.example'
+group 'com.thekingdave.tgm.syt'
 version '1.0-SNAPSHOT'
+
+sourceCompatibility = 1.8
 
 repositories {
     mavenCentral()
+    maven {
+        url 'http://clojars.org/repo/'
+    }
 }
 
 dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.12'
     // https://mvnrepository.com/artifact/org.apache.storm/storm
-    compile 'org.apache.storm:storm-core:2.1.0'
+    compile group: 'org.apache.storm', name: 'storm-core', version: '2.1.0'
     // https://mvnrepository.com/artifact/com.fasterxml.jackson.core/jackson-databind
     compile group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.10.3'
 }

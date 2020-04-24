@@ -1,3 +1,5 @@
+package spouts;
+
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.topology.OutputFieldsDeclarer;
@@ -23,7 +25,7 @@ public class RandomIntSpout extends BaseRichSpout {
     @Override
     public void nextTuple() {
         Utils.sleep(1000);
-        outputCollector.emit(new Values(random.nextInt()), System.currentTimeMillis());
+        outputCollector.emit(new Values(random.nextInt(100), System.currentTimeMillis()));
     }
 
     @Override
