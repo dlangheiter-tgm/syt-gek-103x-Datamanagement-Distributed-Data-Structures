@@ -21,6 +21,12 @@ Umgebung gestartet werden können (unterschiedliche Servereinheiten).
 
 ## Vergleich
 
+Ich habe die Frameworks Atomix und Apache Storm verglichen.
+
+Atomix verbindet mehrere Hosts miteinander ohne klare Struktur. Diese Hosts sind Unabhängig voneinander. Es wird vor allem ein Ansatz von Publish and Subscribe oder auch Broadcast. Dies passiert auf unterschiedlichen Topics um die kommunikation voneinander zu trennen.
+
+Apache Storm ist dafür gedacht viele Daten in Realtime zu verarbeiten. Es kann bis zu eine Millionen Tupel pro Sekunde pro Node verarbeiten. Diese Daten sind festgeschrieben wie sie verarbeitet werden (Von welchem Sprout zu welchen Bolt). Und hat daher eine stark vorgeschrieben Struktur und Aufbau.
+
 ## Implementierung
 ### Atmoix
 
@@ -132,3 +138,196 @@ Client2: 11
 ```
 
 Hier kann man sehen das eine Aufgabe eine Fibonacci Nummer zu finden einem Client zugeteilt wird. Man sieht außerdem, dass der zweite Client am Anfang noch nicht gestartet war und deswegen die ersten drei Aufgaben an Client 1 gesendet wurden.
+
+### Storm
+
+Storm verwendet einen Fluss an Tuples. Ein "Tuple" ist eine Liste an benannten Werten.
+
+Storm verwendet "Spout", "Bolt" und "Topology". Ein "Spout" ist eine Datenquelle. Ein "Bolt" nimmt eine Anzahl von Inputs und generiert eine Anzahl an Outputs. Die "Toplogoy" beschreibt die Topologie des Netzwerkes und wie die unterschiedlichen "Spouts" und "Bolts" miteinander verbunden sind.
+
+Die Topologie unseres Netzwerkes schaut wie folgt aus.
+
+![Storm Diagram](README.assets/Storm Diagram.svg)
+
+Unserer `RandomNumberSpout` wird mit `open` initialisiert. In `nextTouple` wird das nächste Tuple abgefragt. In dieser integrieren wir ein künstliches warten um Abfragezeiten zu simulieren. `declareOutputFields` werden die Namen der Werte vom Tupel gesetzt. `RandomIntSpout` ist ziemlich der selbe Code nur das die zufälligen Nummern kleiner sind und der Output Name `randomInt` ist.
+
+```java
+public class RandomNumberSpout extends BaseRichSpout {
+    private Random random;
+    private SpoutOutputCollector outputCollector;
+
+    @Override
+    public void open(Map<String, Object> conf, TopologyContext context, SpoutOutputCollector collector) {
+        random = new Random();
+        outputCollector = collector;
+    }
+
+    @Override
+    public void nextTuple() {
+        Utils.sleep(1000);
+        int operation = random.nextInt(100);
+        long timestamp = System.currentTimeMillis();
+        
+        Values values = new Values(operation, timestamp);
+        outputCollector.emit(values);
+    }
+
+    @Override
+    public void declareOutputFields(OutputFieldsDeclarer declarer) {
+        declarer.declare(new Fields("operation", "timestamp"));
+    }
+}
+
+```
+
+Die Klasse `FilteringBolt` filtert alle Tuples wo die Operation 0 ist. Die anderen werden unverändert weitergeleitet.
+
+```java
+public class FilteringBolt extends BaseBasicBolt {
+    @Override
+    public void execute(Tuple input, BasicOutputCollector collector) {
+        int operation = input.getIntegerByField("operation");
+        if(operation > 0) {
+            collector.emit(input.getValues());
+        }
+    }
+
+    @Override
+    public void declareOutputFields(OutputFieldsDeclarer declarer) {
+        declarer.declare(new Fields("operation", "timestamp"));
+    }
+}
+```
+
+Im `AggregationBolt` aggregieren wir die Summe der zufälligen Werte von dem `FilterBolt`. Hierbei bekommen wir ein `TupleWindow`. Wie groß diese Fenster ist wird über die Topologie festgesetzt.
+
+```java
+public class AggregationBolt extends BaseWindowedBolt {
+    private OutputCollector collector;
+    
+    @Override
+    public void prepare(Map<String, Object> topoConf, TopologyContext context, OutputCollector collector) {
+        this.collector = collector;
+    }
+
+    @Override
+    public void execute(TupleWindow inputWindow) {
+        List<Tuple> tuples = inputWindow.get();
+        tuples.sort(Comparator.comparing(this::getTimestamp));
+        
+        int sumOfOperations = tuples.stream()
+                .mapToInt(tuple -> tuple.getIntegerByField("operation"))
+                .sum();
+        Long beginningTimestamp = getTimestamp(tuples.get(0));
+        Long endTimestamp = getTimestamp(tuples.get(tuples.size() - 1));
+
+        Values values = new Values(sumOfOperations, beginningTimestamp, endTimestamp);
+        collector.emit(values);
+    }
+
+    private Long getTimestamp(Tuple tuple) {
+        return tuple.getLongByField("timestamp");
+    }
+    
+    @Override
+    public void declareOutputFields(OutputFieldsDeclarer declarer) {
+        declarer.declare(new Fields("sumOfOperations", "beginningTimestamp", "endTimestamp"));
+    }
+}
+```
+
+Im `FileWritingBolt` bekommen wir die Daten vom `AggregationBolt` und schreiben diese in eine Datei wenn die Summe größer als 10 ist.
+
+```java
+public class FileWritingBolt extends BaseRichBolt {
+    public static Logger logger = LoggerFactory.getLogger(FileWritingBolt.class);
+    private BufferedWriter writer;
+    private String filePath;
+    private ObjectMapper objectMapper;
+
+    public FileWritingBolt(String filePath) {
+        this.filePath = filePath;
+    }
+
+    @Override
+    public void cleanup() {
+        try {
+            writer.close();
+        } catch (IOException e) {
+            logger.error("Failed to close writer!");
+        }
+    }
+
+    @Override
+    public void prepare(Map<String, Object> topoConf, TopologyContext context, OutputCollector collector) {
+        objectMapper = new ObjectMapper();
+        objectMapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
+
+        try {
+            writer = new BufferedWriter(new FileWriter(filePath));
+        } catch (IOException e) {
+            logger.error("Failed to open file for writing!", e);
+        }
+    }
+
+    @Override
+    public void execute(Tuple input) {
+        int sumOfOperations = input.getIntegerByField("sumOfOperations");
+        long beginningTimestamp = input.getLongByField("beginningTimestamp");
+        long endTimestamp = input.getLongByField("endTimestamp");
+
+        if (sumOfOperations > 10) {
+            AggregationWindow aggregationWindow = new AggregationWindow(sumOfOperations, beginningTimestamp, endTimestamp);
+            try {
+                writer.write(objectMapper.writeValueAsString(aggregationWindow));
+                writer.newLine();
+                writer.flush();
+            } catch (IOException e) {
+                logger.error("Failed to write data to file.", e);
+            }
+        }
+    }
+
+    @Override
+    public void declareOutputFields(OutputFieldsDeclarer declarer) {
+        
+    }
+}
+```
+
+Um nun alle diese Spouts und Bolts in eine Topologie zu verbinden verwenden wir einen `TopologyBuilder`. Hier können wir `setSpout` verwenden um ein Datenquelle zu definieren. Wir müssen eine ID und unsere Implementation angeben. Danach können wir mit `setBolt` ein Bolt definieren. Hierbei müssen wir wieder eine ID und unsere Implementation angeben. Außerdem müssen wir mittels `shuffleGrouping` eine Spout oder Bolt definieren von wo Daten weitergeleitet werden. Für die `AggregationBolt` definieren wir welcher Wert der Zeitpunkt ist und über welchen Zeitraum wir die Daten aggregieren.
+
+```java
+public class Main {
+    public static void main(String[] args) throws Exception {
+        TopologyBuilder builder = new TopologyBuilder();
+
+        builder.setSpout("randomIntSpout", new RandomIntSpout());
+        builder.setBolt("printBolt", new PrintingBolt()).shuffleGrouping("randomIntSpout");
+
+        builder.setSpout("randomNumberSpout", new RandomNumberSpout());
+        builder.setBolt("filteringBolt", new FilteringBolt()).shuffleGrouping("randomNumberSpout");
+        builder.setBolt("aggregationBolt", new AggregationBolt()
+                .withTimestampField("timestamp")
+                .withLag(BaseWindowedBolt.Duration.seconds(1))
+                .withWindow(BaseWindowedBolt.Duration.seconds(5))
+        ).shuffleGrouping("filteringBolt");
+
+        String filePath = "operations.txt";
+        builder.setBolt("fileBolt", new FileWritingBolt(filePath)).shuffleGrouping("aggregationBolt");
+
+        Config config = new Config();
+        config.setDebug(false);
+        LocalCluster cluster = new LocalCluster();
+        cluster.submitTopology("Test", config, builder.createTopology());
+    }
+}
+```
+
+## Quellen
+
+http://storm.apache.org/about/simple-api.html
+
+https://www.baeldung.com/apache-storm
+
+https://atomix.io/docs/latest/user-manual/introduction/what-is-atomix/

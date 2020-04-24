@@ -23,8 +23,8 @@ public class RandomNumberSpout extends BaseRichSpout {
 
     @Override
     public void nextTuple() {
-        Utils.sleep(10000);
-        int operation = random.nextInt(101);
+        Utils.sleep(1000);
+        int operation = random.nextInt(100);
         long timestamp = System.currentTimeMillis();
         
         Values values = new Values(operation, timestamp);

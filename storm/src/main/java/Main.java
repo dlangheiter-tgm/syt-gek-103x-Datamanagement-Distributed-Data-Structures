@@ -11,10 +11,6 @@ import spouts.RandomNumberSpout;
 
 public class Main {
     public static void main(String[] args) throws Exception {
-        runTopology();
-    }
-
-    public static void runTopology() throws Exception {
         TopologyBuilder builder = new TopologyBuilder();
 
         builder.setSpout("randomIntSpout", new RandomIntSpout());
