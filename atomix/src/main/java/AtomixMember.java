@@ -19,7 +19,7 @@ public class AtomixMember {
 
             builder.withMembershipProvider(
                     BootstrapDiscoveryProvider.builder()
-                            .withNodes(StaticVars.master, StaticVars.client1)
+                            .withNodes(StaticVars.master)
                             .build());
         } else if (client == 2) {
             builder.withMemberId(StaticVars.client2Id)
@@ -28,7 +28,7 @@ public class AtomixMember {
 
             builder.withMembershipProvider(
                     BootstrapDiscoveryProvider.builder()
-                            .withNodes(StaticVars.master, StaticVars.client2)
+                            .withNodes(StaticVars.master)
                             .build());
         } else {
             throw new RuntimeException("Could not start client with id " + client);

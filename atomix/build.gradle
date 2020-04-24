@@ -19,5 +19,5 @@ dependencies {
     compile group: 'io.atomix', name: 'atomix-raft', version: '3.1.5'
     compile group: 'io.atomix', name: 'atomix-primary-backup', version: '3.1.5'
     compile group: 'io.atomix', name: 'atomix-gossip', version: '3.1.5'
-
 }
+
