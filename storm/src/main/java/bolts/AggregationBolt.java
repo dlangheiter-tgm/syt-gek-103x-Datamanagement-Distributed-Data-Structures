@@ -28,6 +28,7 @@ public class AggregationBolt extends BaseWindowedBolt {
 
     @Override
     public void execute(TupleWindow inputWindow) {
+        System.out.println("AGGREGATION " + inputWindow.toString());
         List<Tuple> tuples = inputWindow.get();
         tuples.sort(Comparator.comparing(this::getTimestamp));
         

@@ -23,6 +23,10 @@ public class FileWritingBolt extends BaseRichBolt {
     private String filePath;
     private ObjectMapper objectMapper;
 
+    public FileWritingBolt(String filePath) {
+        this.filePath = filePath;
+    }
+
     @Override
     public void cleanup() {
         try {
@@ -46,11 +50,13 @@ public class FileWritingBolt extends BaseRichBolt {
 
     @Override
     public void execute(Tuple input) {
+        System.out.println("FILE " + input.toString());
+        
         int sumOfOperations = input.getIntegerByField("sumOfOperations");
         long beginningTimestamp = input.getLongByField("beginningTimestamp");
         long endTimestamp = input.getLongByField("endTimestamp");
 
-        if (sumOfOperations > 2000) {
+        if (sumOfOperations > 10) {
             AggregationWindow aggregationWindow = new AggregationWindow(sumOfOperations, beginningTimestamp, endTimestamp);
             try {
                 writer.write(objectMapper.writeValueAsString(aggregationWindow));
